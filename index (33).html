@@ -1,0 +1,294 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест по математике и логике</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom, #e0f2fe, #bfdbfe);
+        }
+        .quiz-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .quiz-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+        }
+        .btn-primary {
+            background: linear-gradient(to right, #3b82f6, #1d4ed8);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(to right, #2563eb, #1e40af);
+        }
+        .btn-secondary {
+            background: linear-gradient(to right, #10b981, #047857);
+        }
+        .btn-secondary:hover {
+            background: linear-gradient(to right, #059669, #065f46);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div id="quiz-container" class="quiz-card bg-white p-8 rounded-xl shadow-lg w-full max-w-lg">
+        <h1 class="text-3xl font-extrabold mb-6 text-center text-gray-800">Тест по математике и логике</h1>
+        <div class="flex justify-between items-center mb-4">
+            <div id="progress" class="text-sm font-medium text-gray-600"></div>
+            <div id="timer" class="text-sm font-medium text-red-600"></div>
+        </div>
+        <div id="question" class="text-lg mb-6 font-medium text-gray-700"></div>
+        <input id="answer" type="number" step="any" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Введите ваш ответ">
+        <button id="submit" class="btn-primary w-full text-white p-3 rounded-lg font-semibold">Ответить</button>
+        <div id="feedback" class="mt-4 text-center font-medium"></div>
+    </div>
+    <div id="result-container" class="hidden quiz-card bg-white p-8 rounded-xl shadow-lg w-full max-w-lg">
+        <h1 class="text-3xl font-extrabold mb-6 text-center text-gray-800">Результаты</h1>
+        <div id="result" class="text-lg mb-6 font-medium text-gray-700"></div>
+        <button id="restart" class="btn-secondary w-full text-white p-3 rounded-lg font-semibold">Начать заново</button>
+    </div>
+    <script>
+        const totalQuestions = 30;
+        const totalTime = 30 * 60; // 30 минут в секундах
+        let currentQuestion = 0;
+        let correctAnswers = 0;
+        let questions = [];
+        let timeLeft = totalTime;
+        let timerInterval;
+
+        // Генерация вопросов
+        function generateQuestions() {
+            questions = [];
+            const questionTypes = [
+                // Алгебра: линейное уравнение (ax + b = c)
+                () => {
+                    const a = Math.floor(Math.random() * 9) + 1;
+                    const b = Math.floor(Math.random() * 20) - 10;
+                    const x = Math.floor(Math.random() * 20) - 10;
+                    const c = a * x + b;
+                    return {
+                        text: `Решите уравнение: ${a}x + ${b} = ${c}. Чему равно x?`,
+                        answer: x
+                    };
+                },
+                // Геометрия: площадь прямоугольника
+                () => {
+                    const a = Math.floor(Math.random() * 10) + 1;
+                    const b = Math.floor(Math.random() * 10) + 1;
+                    return {
+                        text: `Прямоугольник имеет стороны ${a} и ${b}. Чему равна его площадь?`,
+                        answer: a * b
+                    };
+                },
+                // Тригонометрия: sin(30°) или sin(60°)
+                () => {
+                    const angle = Math.random() < 0.5 ? 30 : 60;
+                    const value = angle === 30 ? 0.5 : Math.sqrt(3) / 2;
+                    return {
+                        text: `Чему равно sin(${angle}°)? Ответ в виде десятичной дроби (округлите до 2 знаков).`,
+                        answer: parseFloat(value.toFixed(2))
+                    };
+                },
+                // Вероятность: подбрасывание монеты
+                () => {
+                    const n = Math.floor(Math.random() * 3) + 2; // 2-4 подбрасывания
+                    return {
+                        text: `Монету подбрасывают ${n} раз. Какова вероятность выпадения ровно одного орла? Ответ в виде десятичной дроби.`,
+                        answer: parseFloat((n / Math.pow(2, n)).toFixed(3))
+                    };
+                },
+                // Логика: арифметическая прогрессия
+                () => {
+                    const a1 = Math.floor(Math.random() * 10) + 1;
+                    const d = Math.floor(Math.random() * 5) + 1;
+                    const n = Math.floor(Math.random() * 5) + 5; // 5-9 член
+                    const an = a1 + (n - 1) * d;
+                    return {
+                        text: `В арифметической прогрессии первый член ${a1}, разность ${d}. Чему равен ${n}-й член?`,
+                        answer: an
+                    };
+                },
+                // Алгебра: квадратное уравнение (x² + bx + c = 0, один корень)
+                () => {
+                    const x = Math.floor(Math.random() * 10) - 5;
+                    const b = Math.floor(Math.random() * 10) - 5;
+                    const c = x * (x + b); // x² + bx + c = 0
+                    return {
+                        text: `Решите уравнение: x² + ${b}x + ${c} = 0. Введите один из корней (x).`,
+                        answer: x
+                    };
+                },
+                // Геометрия: длина окружности
+                () => {
+                    const r = Math.floor(Math.random() * 10) + 1;
+                    const circumference = 2 * Math.PI * r;
+                    return {
+                        text: `Радиус окружности равен ${r}. Чему равна её длина? Ответ округлите до 2 знаков.`,
+                        answer: parseFloat(circumference.toFixed(2))
+                    };
+                },
+                // Логика: комбинаторика (количество комбинаций)
+                () => {
+                    const n = Math.floor(Math.random() * 4) + 3; // 3-6
+                    const k = Math.floor(Math.random() * (n - 1)) + 1; // 1-(n-1)
+                    const combinations = factorial(n) / (factorial(k) * factorial(n - k));
+                    return {
+                        text: `Сколько способов выбрать ${k} элементов из ${n}?`,
+                        answer: combinations
+                    };
+                }
+            ];
+
+            function factorial(n) {
+                return n <= 1 ? 1 : n * factorial(n - 1);
+            }
+
+            for (let i = 0; i < totalQuestions; i++) {
+                const questionType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
+                questions.push(questionType());
+            }
+        }
+
+        // Обновление таймера
+        function updateTimer() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('timer').textContent = `Осталось: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            timeLeft--;
+            if (timeLeft < 0) {
+                clearInterval(timerInterval);
+                showResult();
+            }
+        }
+
+        // Отображение вопроса
+        function showQuestion() {
+            const q = questions[currentQuestion];
+            document.getElementById('question').textContent = `Вопрос ${currentQuestion + 1}: ${q.text}`;
+            document.getElementById('answer').value = '';
+            document.getElementById('feedback').textContent = '';
+            document.getElementById('progress').textContent = `Вопрос ${currentQuestion + 1} из ${totalQuestions}`;
+            document.getElementById('answer').focus();
+        }
+
+        // Проверка ответа
+        function checkAnswer() {
+            const userAnswer = parseFloat(document.getElementById('answer').value);
+            const correctAnswer = questions[currentQuestion].answer;
+            if (isNaN(userAnswer)) {
+                document.getElementById('feedback').textContent = 'Пожалуйста, введите число.';
+                document.getElementById('feedback').className = 'mt-4 text-center text-red-500 font-medium';
+                return;
+            }
+            if (Math.abs(userAnswer - correctAnswer) < 0.01) {
+                correctAnswers++;
+                document.getElementById('feedback').textContent = 'Правильно!';
+                document.getElementById('feedback').className = 'mt-4 text-center text-green-500 font-medium';
+            } else {
+                document.getElementById('feedback').textContent = `Неправильно. Правильный ответ: ${correctAnswer}`;
+                document.getElementById('feedback').className = 'mt-4 text-center text-red-500 font-medium';
+            }
+            document.getElementById('submit').textContent = 'Далее';
+            document.getElementById('submit').onclick = nextQuestion;
+        }
+
+        // Переход к следующему вопросу
+        function nextQuestion() {
+            currentQuestion++;
+            if (currentQuestion < totalQuestions) {
+                showQuestion();
+                document.getElementById('submit').textContent = 'Ответить';
+                document.getElementById('submit').onclick = checkAnswer;
+            } else {
+                clearInterval(timerInterval);
+                showResult();
+            }
+        }
+
+        // Показ результатов
+        function showResult() {
+            document.getElementById('quiz-container').classList.add('hidden');
+            document.getElementById('result-container').classList.remove('hidden');
+            const percentage = Math.round((correctAnswers / totalQuestions) * 100);
+            let grade;
+            if (percentage >= 90) grade = 5;
+            else if (percentage >= 75) grade = 4;
+            else if (percentage >= 60) grade = 3;
+            else if (percentage >= 40) grade = 2;
+            else grade = 1;
+            document.getElementById('result').innerHTML = `
+                Вы ответили правильно на ${correctAnswers} из ${totalQuestions} вопросов (${percentage}%).<br>
+                Ваша оценка: ${grade}
+            `;
+        }
+
+        // Перезапуск теста
+        function restartQuiz() {
+            currentQuestion = 0;
+            correctAnswers = 0;
+            timeLeft = totalTime;
+            generateQuestions();
+            showQuestion();
+            document.getElementById('quiz-container').classList.remove('hidden');
+            document.getElementById('result-container').classList.add('hidden');
+            document.getElementById('submit').textContent = 'Ответить';
+            document.getElementById('submit').onclick = checkAnswer;
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        // Инициализация
+        generateQuestions();
+        showQuestion();
+        document.getElementById('submit').onclick = checkAnswer;
+        document.getElementById('restart').onclick = restartQuiz;
+        timerInterval = setInterval(updateTimer, 1000);
+
+        // Поддержка Enter для отправки ответа
+        document.getElementById('answer').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('submit').click();
+            }
+        });
+    </script>
+</body>
+</html>
